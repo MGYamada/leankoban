@@ -73,27 +73,46 @@ def stty (args : Array String) : IO (Option String) := do
   catch _ =>
     return none
 
-/-- raw モードに入る。成功したら、元に戻すための設定文字列を返す。 -/
+/-- raw モードに入る。成功したら、元に戻すための設定文字列を返す。
+
+`-isig` で Ctrl-C / Ctrl-\ / Ctrl-Z によるシグナルの発生を止め、ただのバイトとして読む。
+シグナルで終了すると `main` の `finally` が走らず、端末が raw モードのまま残ってしまうため、
+これらのキーは `isQuitKey` で受けて、通常の終了処理（端末設定の復元）を通す。 -/
 def enterRaw : IO (Option String) := do
   let some saved ← stty #["-g"] | return none
-  let some _ ← stty #["-icanon", "-echo", "min", "1", "time", "0"] | return none
+  let some _ ← stty #["-icanon", "-echo", "-isig", "min", "1", "time", "0"] | return none
   return some saved
 
 /-- 端末の設定を元に戻す。 -/
 def leaveRaw (saved : String) : IO Unit := do
   let _ ← stty #[saved]
 
+/-- 終了として扱う制御キー：Ctrl-C（3）、Ctrl-D（4）、Ctrl-\（28）。 -/
+def isQuitKey (b : UInt8) : Bool :=
+  b.toNat == 3 || b.toNat == 4 || b.toNat == 28
+
 /-- 1 バイト読む。入力の終わりなら `none`。 -/
 def readByte (stdin : IO.FS.Stream) : IO (Option UInt8) := do
   let bs ← stdin.read 1
   return bs.data[0]?
 
-/-- raw モードで数字の列を読む（`g` で面番号を指定するとき用）。Enter で確定、Esc で取消。 -/
-partial def readNumber (stdin stdout : IO.FS.Stream) (acc : String := "") : IO (Option Nat) := do
-  let some b ← readByte stdin | return acc.toNat?
+/-- 面番号の入力結果。 -/
+inductive NumberInput where
+  | num (n : Nat)
+  | cancel
+  | quit
+
+/-- raw モードで数字の列を読む（`g` で面番号を指定するとき用）。
+Enter で確定、Esc で取消、Ctrl-C などで終了。 -/
+partial def readNumber (stdin stdout : IO.FS.Stream) (acc : String := "") : IO NumberInput := do
+  let finish (s : String) : NumberInput := match s.toNat? with
+    | some n => .num n
+    | none => .cancel
+  let some b ← readByte stdin | return .quit
   let n := b.toNat
-  if n == 10 || n == 13 then return acc.toNat?
-  else if n == 27 then return none
+  if isQuitKey b then return .quit
+  else if n == 10 || n == 13 then return finish acc
+  else if n == 27 then return .cancel
   else if n == 127 || n == 8 then
     if acc.isEmpty then readNumber stdin stdout acc
     else
@@ -108,6 +127,7 @@ partial def readNumber (stdin stdout : IO.FS.Stream) (acc : String := "") : IO (
 /-- raw モードで 1 操作を読む。矢印キーは `ESC [ A` などの 3 バイトで届く。 -/
 partial def readRawCmd (stdin stdout : IO.FS.Stream) : IO Cmd := do
   let some b ← readByte stdin | return .quit
+  if isQuitKey b then return .quit
   if b.toNat == 27 then
     let some b1 ← readByte stdin | return .quit
     if b1.toNat == 91 || b1.toNat == 79 then  -- '[' または 'O'
@@ -122,8 +142,9 @@ partial def readRawCmd (stdin stdout : IO.FS.Stream) : IO Cmd := do
   else if b.toNat == 103 || b.toNat == 71 then  -- 'g'
     stdout.putStr "\n面番号: "; stdout.flush
     match ← readNumber stdin stdout with
-    | some n => return .goto n
-    | none => readRawCmd stdin stdout
+    | .num n => return .goto n
+    | .cancel => readRawCmd stdin stdout
+    | .quit => return .quit
   else
     match cmdOfKey b with
     | some c => return c
