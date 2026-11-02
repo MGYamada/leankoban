@@ -1,0 +1,217 @@
+import Proofs.Level001
+import Proofs.Level002
+import Proofs.Level003
+import Proofs.Level004
+import Proofs.Level005
+import Proofs.Level006
+import Proofs.Level007
+import Proofs.Level008
+import Proofs.Level009
+import Proofs.Level010
+import Proofs.Level011
+import Proofs.Level012
+import Proofs.Level013
+import Proofs.Level014
+import Proofs.Level015
+import Proofs.Level016
+import Proofs.Level017
+import Proofs.Level018
+import Proofs.Level019
+import Proofs.Level020
+import Proofs.Level021
+import Proofs.Level022
+import Proofs.Level023
+import Proofs.Level024
+import Proofs.Level025
+import Proofs.Level026
+import Proofs.Level027
+import Proofs.Level028
+import Proofs.Level029
+import Proofs.Level030
+import Proofs.Level031
+import Proofs.Level032
+import Proofs.Level033
+import Proofs.Level034
+import Proofs.Level035
+import Proofs.Level036
+import Proofs.Level037
+import Proofs.Level038
+import Proofs.Level039
+import Proofs.Level040
+import Proofs.Level041
+import Proofs.Level042
+import Proofs.Level043
+import Proofs.Level044
+import Proofs.Level045
+import Proofs.Level046
+import Proofs.Level047
+import Proofs.Level048
+import Proofs.Level049
+import Proofs.Level050
+import Proofs.Level051
+import Proofs.Level052
+import Proofs.Level053
+import Proofs.Level054
+import Proofs.Level055
+import Proofs.Level056
+import Proofs.Level057
+import Proofs.Level058
+import Proofs.Level059
+import Proofs.Level060
+import Proofs.Level061
+import Proofs.Level062
+import Proofs.Level063
+import Proofs.Level064
+import Proofs.Level065
+import Proofs.Level066
+import Proofs.Level067
+import Proofs.Level068
+import Proofs.Level069
+import Proofs.Level070
+import Proofs.Level071
+import Proofs.Level072
+import Proofs.Level073
+import Proofs.Level074
+import Proofs.Level075
+import Proofs.Level076
+import Proofs.Level077
+import Proofs.Level078
+import Proofs.Level079
+import Proofs.Level080
+import Proofs.Level081
+import Proofs.Level082
+import Proofs.Level083
+import Proofs.Level084
+import Proofs.Level085
+import Proofs.Level086
+import Proofs.Level087
+import Proofs.Level088
+import Proofs.Level089
+import Proofs.Level090
+import Proofs.Level091
+import Proofs.Level092
+import Proofs.Level093
+import Proofs.Level094
+import Proofs.Level095
+import Proofs.Level096
+import Proofs.Level097
+import Proofs.Level098
+import Proofs.Level099
+import Proofs.Level100
+
+/-!
+# 全 100 面の可解性
+
+ゲームに収録された全 100 面（`Leankoban.Levels.all`）が、どれも `WellFormed` かつ `Solvable` であること。
+各面の証明は `Proofs/LevelNNN.lean` にある。（`lake exe genproofs` が自動生成。手で編集しない。）
+-/
+
+namespace Leankoban
+
+set_option maxRecDepth 16384 in
+/-- **ゲームに収録された全 100 面はクリア可能である。** -/
+theorem all_levels_solvable :
+    ∀ rows ∈ Levels.all, WellFormed (Level.ofRows rows) ∧ Solvable (Level.ofRows rows) :=
+  Soundness.forall_mem_cons_intro Proofs.Level001.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level002.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level003.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level004.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level005.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level006.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level007.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level008.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level009.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level010.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level011.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level012.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level013.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level014.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level015.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level016.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level017.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level018.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level019.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level020.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level021.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level022.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level023.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level024.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level025.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level026.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level027.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level028.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level029.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level030.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level031.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level032.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level033.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level034.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level035.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level036.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level037.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level038.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level039.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level040.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level041.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level042.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level043.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level044.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level045.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level046.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level047.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level048.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level049.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level050.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level051.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level052.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level053.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level054.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level055.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level056.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level057.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level058.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level059.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level060.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level061.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level062.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level063.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level064.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level065.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level066.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level067.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level068.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level069.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level070.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level071.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level072.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level073.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level074.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level075.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level076.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level077.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level078.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level079.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level080.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level081.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level082.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level083.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level084.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level085.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level086.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level087.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level088.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level089.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level090.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level091.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level092.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level093.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level094.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level095.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level096.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level097.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level098.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level099.solvable
+    (Soundness.forall_mem_cons_intro Proofs.Level100.solvable
+    (Soundness.forall_mem_nil))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+
+end Leankoban
