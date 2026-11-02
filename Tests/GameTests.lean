@@ -78,4 +78,61 @@ def mentionsStty (err : String) : Bool := (err.splitOn "stty sane").length > 1
   let (_, r, err) ← runCleanup false true false draw
   expect "復元と出力の失敗" <| r matches .error _ && mentionsStty err
 
+/-! ## raw モードのキー入力 -/
+
+/-- `readRawCmd` で操作を読み、`quit` が出るまで集める（`fuel` 回まで）。 -/
+def collectCmds (stdin stdout : IO.FS.Stream) : Nat → IO (List Cmd)
+  | 0 => return []
+  | fuel + 1 => do
+    let c ← readRawCmd stdin stdout
+    if c == .quit then return [c] else return c :: (← collectCmds stdin stdout fuel)
+
+/-- 文字列のバイト列を raw モードの入力として与え、読めた操作の列を返す。入力の終わりは `quit` になる。 -/
+def rawCmds (input : String) : IO (List Cmd) := do
+  let inBuf ← IO.mkRef ({ data := input.toUTF8 } : IO.FS.Stream.Buffer)
+  let outBuf ← IO.mkRef ({} : IO.FS.Stream.Buffer)
+  -- 1 操作は 1 バイト以上を読むか、入力の終わりで quit になるので、バイト数 + 1 回で必ず止まる
+  collectCmds (.ofBuffer inBuf) (.ofBuffer outBuf) (input.toUTF8.size + 1)
+
+def expectRaw (input : String) (expected : List Cmd) : IO Unit := do
+  let got ← rawCmds input
+  expect s!"raw 入力 {repr input} → {repr got}（期待 {repr expected}）" (got == expected)
+
+-- 矢印キー（CSI / SS3）と WASD
+#eval expectRaw "\x1b[A\x1b[B\x1b[C\x1b[D" [.move .U, .move .D, .move .R, .move .L, .quit]
+#eval expectRaw "\x1bOA\x1bOB\x1bOC\x1bOD" [.move .U, .move .D, .move .R, .move .L, .quit]
+#eval expectRaw "wasd" [.move .U, .move .L, .move .D, .move .R, .quit]
+-- 修飾付きの矢印（Ctrl+← = ESC [1;5D）は列全体で 1 つの矢印。末尾の D が右移動に化けない
+#eval expectRaw "\x1b[1;5D" [.move .L, .quit]
+-- 矢印以外のキーの列（Delete、Home、F5、F1）は列全体を読み捨て、後ろのキーは効く
+#eval expectRaw "\x1b[3~\x1b[H\x1b[15~\x1bOPa" [.move .L, .quit]
+
+-- 単独の Esc の後の通常キー・終了キーは、そのまま 1 回で効く
+#eval expectRaw "\x1bqa" [.quit]                -- Esc → q
+#eval expectRaw "\x1b\x03a" [.quit]             -- Esc → Ctrl-C
+#eval expectRaw "\x1b\x1ca" [.quit]             -- Esc → Ctrl-\
+#eval expectRaw "\x1ba" [.move .L, .quit]       -- Esc → a は左へ 1 手
+#eval expectRaw "\x1b\x1b[A" [.move .U, .quit]  -- Esc → 矢印
+
+-- 未完成のエスケープ列の途中で終了キーを押したら、列を打ち切って終了する
+#eval expectRaw "\x1b[\x03a" [.quit]
+#eval expectRaw "\x1b[1;\x03a" [.quit]
+#eval expectRaw "\x1bO\x04a" [.quit]
+-- 未完成の列の途中に新しい ESC が来たら、そこから読み直す
+#eval expectRaw "\x1b[1\x1b[B" [.move .D, .quit]
+
+-- 入力の終わりは、エスケープ列の途中でも終了
+#eval expectRaw "" [.quit]
+#eval expectRaw "\x1b" [.quit]
+#eval expectRaw "\x1b[" [.quit]
+#eval expectRaw "\x1b[1;5" [.quit]
+
+-- g：面番号の入力
+#eval expectRaw "g12\r" [.goto 12, .quit]
+#eval expectRaw "g\ra" [.move .L, .quit]                    -- 数字なしの Enter は取消
+#eval expectRaw "g1\x03a" [.quit]                           -- 入力中の Ctrl-C は終了
+#eval expectRaw "g1\x1bq" [.quit]                           -- Esc で取り消し、q で終了
+#eval expectRaw "g1\x1bda" [.move .R, .move .L, .quit]      -- Esc で取り消した後のキーは効く
+#eval expectRaw "g1\x1b[Aa" [.move .U, .move .L, .quit]     -- 矢印で取り消すと、その矢印で動く
+
 end Leankoban.Tests.Game
