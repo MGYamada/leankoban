@@ -21,7 +21,7 @@ inductive Cmd where
   | goto (n : Nat)
   | help
   | quit
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 /-- 1 キー（ASCII バイト）を操作に変換する。
 移動は WASD / hjkl（矢印キーは raw モードで別途処理する）。 -/
@@ -83,9 +83,9 @@ def enterRaw : IO (Option String) := do
   let some _ ← stty #["-icanon", "-echo", "-isig", "min", "1", "time", "0"] | return none
   return some saved
 
-/-- 端末の設定を元に戻す。 -/
-def leaveRaw (saved : String) : IO Unit := do
-  let _ ← stty #[saved]
+/-- 端末の設定を元に戻す。戻せたら `true`。 -/
+def leaveRaw (saved : String) : IO Bool :=
+  return (← stty #[saved]).isSome
 
 /-- 終了として扱う制御キー：Ctrl-C（3）、Ctrl-D（4）、Ctrl-\（28）。 -/
 def isQuitKey (b : UInt8) : Bool :=
@@ -96,10 +96,65 @@ def readByte (stdin : IO.FS.Stream) : IO (Option UInt8) := do
   let bs ← stdin.read 1
   return bs.data[0]?
 
+/-! ## エスケープ列
+
+矢印キーなどは `ESC [ A`（CSI）や `ESC O A`（SS3）のようなバイト列で届く。1 バイトずつ読み、
+次の状態機械で解釈する。状態を持ち越すので、列が何回かの読み込みに分かれて届いても壊れない。
+
+* `ESC [` または `ESC O` の後は、パラメータ・中間バイト（0x20〜0x3F）を読み飛ばし、
+  終端バイト（0x40〜0x7E）で列を閉じる。終端が `A`〜`D` なら矢印（`ESC [1;5A` のような修飾付きも含む）。
+  それ以外の列（Home、Delete、F キーなど）は、列全体を読み捨てる。
+* 列の途中で列に属さないバイト（Ctrl-C などの制御文字、新しい ESC など）が来たら、そこで列を打ち切り、
+  そのバイトを通常の入力として処理し直す。`ESC` の次が `[` `O` 以外のときも同じ。
+  単独の Esc は何もしない操作なので、その後の `q` や Ctrl-C は 1 回で効く。
+
+待ち時間（タイムアウト）は設けない。単独の Esc は何もしないので、次のバイトが来るまで判定を保留しても
+見た目は変わらないからである。その代わり、Esc の直後に手で打った `[` / `O` は、エスケープ列の始まりとして読む。
+-/
+
+/-- エスケープ列の読み取り状態。 -/
+inductive EscState where
+  | ground  -- 列の外
+  | esc     -- `ESC` を読んだ
+  | seq     -- `ESC [` か `ESC O` を読み、終端バイトを待っている
+  deriving BEq, Repr, Inhabited
+
+/-- 1 バイトを読んだ結果。 -/
+inductive Decoded where
+  | more (st : EscState)  -- 列の途中。次のバイトを読む
+  | key (b : UInt8)       -- 通常のキー（制御文字を含む）
+  | arrow (d : Dir)       -- 矢印キー
+  | ignored               -- 矢印以外のキーの列（列全体を読み捨てた）
+  deriving BEq, Repr
+
+/-- 列の外でバイト `b` を読む。 -/
+def decodeGround (b : UInt8) : Decoded :=
+  if b.toNat == 27 then .more .esc else .key b
+
+/-- 状態 `st` でバイト `b` を読む。 -/
+def decodeByte (st : EscState) (b : UInt8) : Decoded :=
+  let n := b.toNat
+  match st with
+  | .ground => decodeGround b
+  | .esc => if n == 91 || n == 79 then .more .seq else decodeGround b  -- '[' または 'O'
+  | .seq =>
+    if 0x20 ≤ n && n ≤ 0x3F then .more .seq
+    else if 0x40 ≤ n && n ≤ 0x7E then
+      match n with
+      | 65 => .arrow .U  -- 'A'
+      | 66 => .arrow .D  -- 'B'
+      | 67 => .arrow .R  -- 'C'
+      | 68 => .arrow .L  -- 'D'
+      | _ => .ignored
+    else decodeGround b
+
+/-! ## raw モードの入力 -/
+
 /-- 面番号の入力結果。 -/
 inductive NumberInput where
   | num (n : Nat)
-  | cancel
+  | cancel  -- 数字を入れずに Enter
+  | escape  -- Esc で取消。ESC の後に続くバイトは、エスケープ列として読む
   | quit
 
 /-- raw モードで数字の列を読む（`g` で面番号を指定するとき用）。
@@ -112,7 +167,7 @@ partial def readNumber (stdin stdout : IO.FS.Stream) (acc : String := "") : IO N
   let n := b.toNat
   if isQuitKey b then return .quit
   else if n == 10 || n == 13 then return finish acc
-  else if n == 27 then return .cancel
+  else if n == 27 then return .escape
   else if n == 127 || n == 8 then
     if acc.isEmpty then readNumber stdin stdout acc
     else
@@ -124,30 +179,27 @@ partial def readNumber (stdin stdout : IO.FS.Stream) (acc : String := "") : IO N
     readNumber stdin stdout (acc.push c)
   else readNumber stdin stdout acc
 
-/-- raw モードで 1 操作を読む。矢印キーは `ESC [ A` などの 3 バイトで届く。 -/
-partial def readRawCmd (stdin stdout : IO.FS.Stream) : IO Cmd := do
+/-- raw モードで 1 操作を読む。`st` はエスケープ列の読み取り状態。
+入力の終わりは、エスケープ列の途中であっても終了として扱う。 -/
+partial def readRawCmd (stdin stdout : IO.FS.Stream) (st : EscState := .ground) : IO Cmd := do
   let some b ← readByte stdin | return .quit
-  if isQuitKey b then return .quit
-  if b.toNat == 27 then
-    let some b1 ← readByte stdin | return .quit
-    if b1.toNat == 91 || b1.toNat == 79 then  -- '[' または 'O'
-      let some b2 ← readByte stdin | return .quit
-      match b2.toNat with
-      | 65 => return .move .U
-      | 66 => return .move .D
-      | 67 => return .move .R
-      | 68 => return .move .L
-      | _ => readRawCmd stdin stdout
-    else readRawCmd stdin stdout
-  else if b.toNat == 103 || b.toNat == 71 then  -- 'g'
-    stdout.putStr "\n面番号: "; stdout.flush
-    match ← readNumber stdin stdout with
-    | .num n => return .goto n
-    | .cancel => readRawCmd stdin stdout
-    | .quit => return .quit
-  else
-    match cmdOfKey b with
-    | some c => return c
-    | none => readRawCmd stdin stdout
+  match decodeByte st b with
+  | .more st => readRawCmd stdin stdout st
+  | .arrow d => return .move d
+  | .ignored => readRawCmd stdin stdout
+  | .key k =>
+    if isQuitKey k then return .quit
+    else if k.toNat == 103 || k.toNat == 71 then  -- 'g'
+      stdout.putStr "\n面番号: "; stdout.flush
+      match ← readNumber stdin stdout with
+      | .num n => return .goto n
+      | .cancel => readRawCmd stdin stdout
+      -- 矢印キーも ESC で始まるので、取り消した後は列の残りを読む（矢印なら、そのまま移動になる）
+      | .escape => readRawCmd stdin stdout .esc
+      | .quit => return .quit
+    else
+      match cmdOfKey k with
+      | some c => return c
+      | none => readRawCmd stdin stdout
 
 end Leankoban.Game
