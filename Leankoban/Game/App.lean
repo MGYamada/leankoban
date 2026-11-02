@@ -145,6 +145,40 @@ partial def lineLoop (stdin stdout : IO.FS.Stream) (plain : Bool) (s : Session) 
     s ← recordClear (s.apply c)
   lineLoop stdin stdout plain s
 
+/-! ## raw モードの後始末 -/
+
+def hideCursor : String := "\x1b[?25l"
+def showCursor : String := "\x1b[?25h\n"
+
+/-- 標準エラーに 1 行書く。標準エラーにも書けなければ諦める。 -/
+def warn (msg : String) : IO Unit :=
+  try IO.eprintln msg catch _ => pure ()
+
+/-- `act` を実行し、失敗したらその例外を返す（ここでは投げない）。 -/
+def attempt (act : IO Unit) : IO (Option IO.Error) :=
+  try act; return none catch e => return some e
+
+/-- raw モードにした端末で `body` を実行し、終わったら、失敗したときも含めて必ず端末を元に戻す。
+
+* 端末設定の復元 `restore` は、画面への出力より先に、出力の成否とは無関係に実行する。
+  標準出力への書込みや flush が失敗しても、端末が非カノニカル・エコーなしのまま残らない。
+* `body` や出力の失敗は、端末を戻してカーソルの再表示を試みた後で、例外として投げ直す。
+* 復元自体の失敗は、出力の失敗とは別に標準エラーへ報告し（`stty sane` での回復を案内する）、
+  終了コードを 1 にする。 -/
+def withRawMode (stdout : IO.FS.Stream) (restore : IO Bool) (body : IO Unit) : IO UInt32 := do
+  let failed ← attempt do
+    stdout.putStr hideCursor
+    body
+  let restored ← try restore catch _ => pure false
+  -- 出力先が壊れていればここも失敗するが、端末の設定はもう戻してある
+  let failedShow ← attempt do
+    stdout.putStr showCursor
+    stdout.flush
+  unless restored do
+    warn "leankoban: 端末の設定を元に戻せませんでした。`stty sane` を実行すると戻ります。"
+  if let some e := failed <|> failedShow then throw e
+  return if restored then 0 else 1
+
 def usage : String :=
   "使い方: leankoban [面番号] [--line] [--plain]\n" ++
   "  面番号   1〜100（省略時は未クリアの最初の面）\n" ++
@@ -176,14 +210,6 @@ def main (args : List String) : IO UInt32 := do
   | none =>
     lineLoop stdin stdout plain s
     return 0
-  | some saved =>
-    try
-      stdout.putStr "\x1b[?25l"  -- カーソルを隠す
-      rawLoop stdin stdout plain s
-    finally
-      stdout.putStr "\x1b[?25h\n"
-      stdout.flush
-      leaveRaw saved
-    return 0
+  | some saved => withRawMode stdout (leaveRaw saved) (rawLoop stdin stdout plain s)
 
 end Leankoban.Game

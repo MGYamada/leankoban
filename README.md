@@ -130,5 +130,5 @@ Tools/                      乱数・探索用盤面・ソルバー・生成器�
 Proofs/Level001..100.lean   各面の可解性証明（生成物）
 Proofs.lean                 全面の可解性（生成物）
 Proofs/Audit.lean           主張と公理の監査
-Tests/                      実行系・ゲームの単体テスト（#guard）
+Tests/                      実行系・ゲームの単体テスト（ビルド時に評価する #guard / #eval）
 ```

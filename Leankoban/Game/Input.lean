@@ -83,9 +83,9 @@ def enterRaw : IO (Option String) := do
   let some _ ← stty #["-icanon", "-echo", "-isig", "min", "1", "time", "0"] | return none
   return some saved
 
-/-- 端末の設定を元に戻す。 -/
-def leaveRaw (saved : String) : IO Unit := do
-  let _ ← stty #[saved]
+/-- 端末の設定を元に戻す。戻せたら `true`。 -/
+def leaveRaw (saved : String) : IO Bool :=
+  return (← stty #[saved]).isSome
 
 /-- 終了として扱う制御キー：Ctrl-C（3）、Ctrl-D（4）、Ctrl-\（28）。 -/
 def isQuitKey (b : UInt8) : Bool :=
