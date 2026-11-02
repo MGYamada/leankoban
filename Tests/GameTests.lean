@@ -135,4 +135,47 @@ def expectRaw (input : String) (expected : List Cmd) : IO Unit := do
 #eval expectRaw "g1\x1bda" [.move .R, .move .L, .quit]      -- Esc で取り消した後のキーは効く
 #eval expectRaw "g1\x1b[Aa" [.move .U, .move .L, .quit]     -- 矢印で取り消すと、その矢印で動く
 
+/-! ## 操作の列の実行：先頭から順に、quit で止める -/
+
+/-- 面 1（ゲームが読み込む `Levels.all` の先頭）から始めた状態。 -/
+def level1 : Session := Session.load Levels.all.toArray 0 []
+
+/-- 面 1 の証明書の解 `LLullddrUluRR` を WASD で書いたもの。 -/
+def solution1 : String := "aawaassdwawdd"
+
+/-- line モードで 1 行を入力したときの実行結果。 -/
+def line1 (line : String) : Session × Bool := level1.runCmds (parseLine line)
+
+-- クリア手順の後に、同じ行で q：手順を実行してクリアを記録してから終了する
+#guard
+  let (s, quit) := line1 (solution1 ++ "q")
+  quit && s.solved && s.moves == 13 && s.cleared == [1]
+-- q なし：同じ手順でクリアを記録し、終了はしない
+#guard
+  let (s, quit) := line1 solution1
+  !quit && s.solved && s.moves == 13 && s.cleared == [1]
+-- 移動 → q：q より前の移動は実行し、q より後の移動は実行しない
+#guard
+  let (s, quit) := line1 "aaqa"
+  quit && s.moves == 2 && s.pushes == 2
+-- q → 移動：何も実行せずに終了する
+#guard
+  let (s, quit) := line1 "qaa"
+  quit && s.moves == 0
+-- q のみ
+#guard
+  let (s, quit) := line1 "q"
+  quit && s.moves == 0 && s.cleared.isEmpty
+-- 複数の操作（移動・1 手戻す・やり直し・次の面）を順に実行する
+#guard
+  let (s, quit) := line1 "aau"
+  !quit && s.moves == 1
+#guard
+  let (s, quit) := line1 "aarn"
+  !quit && s.idx == 1 && s.moves == 0
+-- クリアしてから次の面へ進み、q で終了しても、面 1 のクリアは残る
+#guard
+  let (s, quit) := line1 (solution1 ++ "nq")
+  quit && s.idx == 1 && s.cleared == [1]
+
 end Leankoban.Tests.Game

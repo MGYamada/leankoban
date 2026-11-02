@@ -68,6 +68,20 @@ def apply (s : Session) : Cmd → Session
   | .help => { s with message := "help" }
   | .quit => s
 
+/-- 解けていれば、その面をクリア済みに加える。 -/
+def markCleared (s : Session) : Session :=
+  let num := s.idx + 1
+  if s.solved && !s.cleared.contains num then
+    { s with cleared := (num :: s.cleared).mergeSort (· ≤ ·) }
+  else s
+
+/-- 操作の列を先頭から順に実行する。操作を 1 つ実行するたびに、解けた面をクリア済みに加える。
+`quit` に達したら、それより後の操作は実行せずに止め、`true`（終了する）を返す。 -/
+def runCmds (s : Session) : List Cmd → Session × Bool
+  | [] => (s, false)
+  | .quit :: _ => (s, true)
+  | c :: cs => runCmds (s.apply c).markCleared cs
+
 end Session
 
 /-! ## 進捗の保存 -/
@@ -115,35 +129,26 @@ def screen (plain line : Bool) (s : Session) : String :=
 
 /-! ## メインループ -/
 
-/-- クリアした面を記録する。 -/
-def recordClear (s : Session) : IO Session := do
-  let num := s.idx + 1
-  if s.solved && !s.cleared.contains num then
-    let cleared := (num :: s.cleared).mergeSort (· ≤ ·)
-    saveProgress cleared
-    return { s with cleared }
-  else return s
+/-- 操作の列を `Session.runCmds` で実行し、クリア済みの面が増えていたら保存する。
+`quit` で止まった場合も、それより前の操作で増えたクリアは保存する。 -/
+def runAndSave (s : Session) (cmds : List Cmd) : IO (Session × Bool) := do
+  let (s', quit) := s.runCmds cmds
+  if s'.cleared != s.cleared then saveProgress s'.cleared
+  return (s', quit)
 
 partial def rawLoop (stdin stdout : IO.FS.Stream) (plain : Bool) (s : Session) : IO Unit := do
   stdout.putStr (screen plain false s); stdout.flush
-  let cmd ← readRawCmd stdin stdout
-  match cmd with
-  | .quit => return
-  | c =>
-    let s ← recordClear (s.apply c)
-    rawLoop stdin stdout plain s
+  let (s, quit) ← runAndSave s [← readRawCmd stdin stdout]
+  unless quit do rawLoop stdin stdout plain s
 
 partial def lineLoop (stdin stdout : IO.FS.Stream) (plain : Bool) (s : Session) : IO Unit := do
   stdout.putStr (screen plain true s)
   stdout.putStr "> "; stdout.flush
   let line ← stdin.getLine
   if line.isEmpty then return  -- 入力の終わり
-  let cmds := parseLine line
-  if cmds.any (fun c => match c with | .quit => true | _ => false) then return
-  let mut s := s
-  for c in cmds do
-    s ← recordClear (s.apply c)
-  lineLoop stdin stdout plain s
+  -- 行の中の操作は先頭から順に実行し、q に達したらそこで終了する（q より前の操作は実行される）
+  let (s, quit) ← runAndSave s (parseLine line)
+  unless quit do lineLoop stdin stdout plain s
 
 /-! ## raw モードの後始末 -/
 
